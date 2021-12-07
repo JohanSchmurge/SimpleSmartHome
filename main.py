@@ -1,6 +1,5 @@
 import wifi
 import time
-import ds18x20
 import onewire
 import socket
 import ntptime
@@ -11,8 +10,6 @@ from machine import Pin, I2C, Timer
 IRQ = Pin(12, Pin.IN)
 IIC = I2C(scl=Pin(5), sda=Pin(4), freq=100000)
 OW = onewire.OneWire(Pin(0))
-DS = ds18x20.DS18X20(OW)
-OUT = 0
 
 
 def request_handler(query):
@@ -33,11 +30,9 @@ def request_handler(query):
         response = openfile('complete.json', 'rb')
         mask = 1 << ch_list.index(query)
         switch(mask)
-        response = response % query.encode()
         return response
 
     response = openfile('error.json', 'rb')
-    response = response % query.encode()
     return response
 
 
