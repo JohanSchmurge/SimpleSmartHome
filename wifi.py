@@ -3,7 +3,6 @@ import time
 from config import SSID, AP_SSID, AP, STA
 from machine import Pin
 
-network.WLAN(network.AP_IF).active(AP)
 wlan = network.WLAN(network.STA_IF)
 wlan.active(STA)
 ap = network.WLAN(network.AP_IF)
@@ -37,5 +36,4 @@ def status(t):
         return True
     else:
         WLAN_LED.off()
-        # debug('Wlan disconnected.')
         return False
