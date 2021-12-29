@@ -1,25 +1,21 @@
-import wifi
-import time
-import onewire
-import socket
-import ntptime
-import config
 from machine import Pin, I2C, Timer
+import time
+import socket
+import config
+import temperature
+import wifi
 
 
 IRQ = Pin(12, Pin.IN)
 IIC = I2C(scl=Pin(5), sda=Pin(4), freq=100000)
-OW = onewire.OneWire(Pin(0))
 
+TEMPERATURE = 0
 
 def request_handler(query):
-
-    ''' Function processing request and generate answer or execute commands'''
-
     if query == '/commands':
         vals = (b'ВЫКЛ.', b'ВКЛ.')
         ch_val = []
-        response = openfile('commands.json', 'rb')
+        response = readfile('content/commands.json', 'rb')
         state = int.from_bytes(IIC.readfrom(33, 1), 'big')
         ch_val = [vals[state >> i & 1] for i in range(8)]
         response = response % tuple(ch_val)
@@ -27,24 +23,28 @@ def request_handler(query):
 
     ch_list = ('/0', '/1', '/2', '/3', '/4', '/5', '/6', '/7')
     if query in ch_list:
-        response = openfile('complete.json', 'rb')
+        response = readfile('content/complete.json', 'rb')
         mask = 1 << ch_list.index(query)
         switch(mask)
         return response
 
-    response = openfile('error.json', 'rb')
+    if query == '/temperature':
+        response = b'"indoor": {"title": "Дома:  %s°C", "summary": ""}' % TEMPERATURE
+        return response
+
+    response = readfile('error.json', 'rb')
     return response
 
 
-def openfile(filename, mode):
-        f = open(filename, mode)
-        data = f.read()
-        f.close()
-        return data
+def readfile(filename, mode):
+    f = open(filename, mode)
+    data = f.read()
+    f.close()
+    return data
 
 
-def writefile(filename, data):
-    f = open(filename, 'wb')
+def writefile(filename, mode, data):
+    f = open(filename, mode)
     f.write(data)
     f.close()
 
@@ -71,7 +71,6 @@ def http_server():
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind(addr)
     s.listen(5)
-    resp = openfile('commands.json', 'rb')
     while True:
         res = s.accept()
         client_sock, client_addr = res
@@ -80,13 +79,12 @@ def http_server():
         req = str(req).split(' ')[1]
         print("Client address:", client_addr)
         print("Client socket:", client_sock)
-        print("Request:")
-        print(req)
+        print("Request: " + req)
         while True:
             header = client_stream.readline()
             if header == b'' or header == b'\r\n':
                 break
-            print(header)
+            # print(header)
         resp = request_handler(req)
         client_stream.write(HEADER)
         client_stream.write(resp)
@@ -94,13 +92,19 @@ def http_server():
 
 
 def main():
+    global TEMPERATURE
     IIC.writeto(33, b'\x00')
     IRQ.irq(trigger=Pin.IRQ_FALLING, handler=irq_handler)
+
     wifi.start()
     wifi_tmr = Timer(-1)
-    wifi_tmr.init(period=10000, mode=Timer.PERIODIC, \
-        callback=lambda t: wifi.status(t))
+    wifi_tmr.init(period=30000, mode=Timer.PERIODIC, callback=lambda w: wifi.status(w))
     print('Timer started.')
+
+    TEMPERATURE = temperature.get_temp()
+    temp_tmr = Timer(-1)
+    temp_tmr.init(period=600000, mode=Timer.PERIODIC, callback=lambda t: wifi.status(t))
+
     http_server()
 
 
